@@ -28,6 +28,11 @@
       <div class="flex items-center justify-between h-16">
         
         <div class="flex-shrink-0 flex items-center">
+            <img 
+                src="/logo.PNG" 
+                alt="Logo" 
+                class="h-12 w-12 mr-4 object-contain drop-shadow-md"
+            >
           <router-link to="/" class="text-2xl font-bold text-gray-900 dark:text-white">
             Enlightened <span class="text-indigo-600 dark:text-indigo-400">Wiki &nbsp &nbsp</span>
           </router-link>
