@@ -1,23 +1,34 @@
-// Import the functions you need from the SDKs you need
 import { initializeApp } from "firebase/app";
 import { getAnalytics } from "firebase/analytics";
-// TODO: Add SDKs for Firebase products that you want to use
-// https://firebase.google.com/docs/web/setup#available-libraries
+import { getAuth } from "firebase/auth";
+import { getFirestore } from "firebase/firestore";
+import { getStorage } from "firebase/storage";
 
-// Your web app's Firebase configuration
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
-  apiKey: "AIzaSyDuPcVD-xSCEKJ0osXUHp0kKdI831zaAIU",
-  authDomain: "enlightened-wiki-78d5d.firebaseapp.com",
-  projectId: "enlightened-wiki-78d5d",
-  storageBucket: "enlightened-wiki-78d5d.firebasestorage.app",
-  messagingSenderId: "255615358990",
-  appId: "1:255615358990:web:279f31d2cd33bf4c67445f",
-  measurementId: "G-FPZVZ54N8X"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyDuPcVD-xSCEKJ0osXUHp0kKdI831zaAIU",
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "enlightened-wiki-78d5d.firebaseapp.com",
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "enlightened-wiki-78d5d",
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "enlightened-wiki-78d5d.firebasestorage.app",
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "255615358990",
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:255615358990:web:279f31d2cd33bf4c67445f",
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || "G-FPZVZ54N8X"
 };
 
-// Initialize Firebase
 const app = initializeApp(firebaseConfig);
 const analytics = getAnalytics(app);
 
-export {app, analytics};
+// Initialize the services
+const auth = getAuth(app);
+const db = getFirestore(app);
+const storage = getStorage(app);
+
+export { app, analytics, auth, db, storage };
+
+import { terminate, clearIndexedDbPersistence } from "firebase/firestore";
+
+// Add this temporary "Nuke" function
+export const nukeCache = async () => {
+  await terminate(db);
+  await clearIndexedDbPersistence(db);
+  console.log("Firestore Cache Cleared");
+};

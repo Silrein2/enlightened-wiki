@@ -1,12 +1,19 @@
-import { createApp } from 'vue'
-import { createPinia } from 'pinia'
+// src/main.js
+import { createApp } from 'vue';
+import './style.css';
+import App from './App.vue';
+import router from './router';
+import { auth } from './firebase';
+import { onAuthStateChanged } from 'firebase/auth';
 
-import App from './App.vue'
-import router from './router'
+let app;
 
-const app = createApp(App)
+// Wait for Firebase Auth to initialize before mounting Vue
+onAuthStateChanged(auth, () => {
+  if (!app) {
+    app = createApp(App).use(router).mount('#app');
+  }
+});
 
-app.use(createPinia())
-app.use(router)
-
-app.mount('#app')
+// import { nukeCache } from './firebase';
+// nukeCache();
