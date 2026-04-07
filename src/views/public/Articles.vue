@@ -67,10 +67,11 @@
         </div>
         </header>
 
-      <article 
-        class="prose prose-indigo dark:prose-invert max-w-none text-gray-800 dark:text-gray-200 leading-relaxed text-lg whitespace-pre-wrap"
+      <div 
+        class="prose dark:prose-invert max-w-none text-gray-900 dark:text-gray-100" 
         v-html="selectedArticle.content"
-      ></article>
+      >
+      </div>
     </div>
 
     <div v-else>

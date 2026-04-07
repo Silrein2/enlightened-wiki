@@ -36,38 +36,50 @@
         </div>
 
         <div v-if="contentType === 'article'" class="space-y-4">
-          
           <div>
-            <div class="flex justify-between items-end mb-1">
-              <label for="content" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Article Content</label>
-              
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Article Content</label>
+            
+            <div class="flex flex-wrap items-center gap-1 p-2 bg-gray-50 dark:bg-gray-900 border border-b-0 border-gray-300 dark:border-gray-600 rounded-t-md">
+              <button type="button" @click="editor.chain().focus().toggleBold().run()" :class="{'bg-indigo-600 text-white': editor?.isActive('bold')}" class="p-1.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 4h8a4 4 0 014 4 4 4 0 01-4 4H6zM6 12h9a4 4 0 014 4 4 4 0 01-4 4H6z"></path></svg>
+              </button>
+
+              <button type="button" @click="editor.chain().focus().toggleItalic().run()" :class="{'bg-indigo-600 text-white': editor?.isActive('italic')}" class="p-1.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path></svg>
+              </button>
+
+              <button type="button" @click="editor.chain().focus().toggleUnderline().run()" :class="{'bg-indigo-600 text-white': editor?.isActive('underline')}" class="p-1.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
+                <span class="font-bold underline px-1">U</span>
+              </button>
+
+              <button type="button" @click="editor.chain().focus().setHorizontalRule().run()" class="p-1.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
+                <span class="text-xs font-bold">— Line</span>
+              </button>
+
+              <div class="w-px h-6 bg-gray-300 dark:bg-gray-600 mx-1"></div>
+
               <input 
-                type="file" 
-                ref="inlineImageInput" 
-                @change="handleInlineImageUpload" 
-                accept="image/*" 
-                class="hidden"
+                type="color" 
+                @input="editor.chain().focus().setColor($event.target.value).run()"
+                class="w-6 h-6 p-0 border-none bg-transparent cursor-pointer"
+                :value="editor?.getAttributes('textStyle').color || '#000000'"
               >
+
+              <div class="w-px h-6 bg-gray-300 dark:bg-gray-600 mx-1"></div>
+
+              <input type="file" ref="inlineImageInput" @change="handleInlineImageUpload" accept="image/*" class="hidden">
               <button 
                 type="button" 
-                @click.prevent="$refs.inlineImageInput.click()"
+                @click.prevent="inlineImageInput.click()"
                 :disabled="isUploadingInline"
-                class="inline-flex items-center px-3 py-1 border border-gray-300 shadow-sm text-xs font-medium rounded text-gray-700 bg-white hover:bg-gray-50 dark:bg-gray-700 dark:text-gray-200 dark:border-gray-600 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+                class="flex items-center gap-2 px-3 py-1 text-xs font-bold bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded hover:bg-indigo-600 hover:text-white transition-colors disabled:opacity-50"
               >
                 <span v-if="isUploadingInline">Uploading...</span>
-                <span v-else>+ Insert Image at Cursor</span>
+                <span v-else>+ Add Image</span>
               </button>
             </div>
-            
-            <textarea 
-              id="content" 
-              ref="articleTextarea"
-              v-model="bodyContent" 
-              required 
-              rows="12" 
-              class="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-white font-mono text-sm"
-              placeholder="Write your article here. Use the button above to insert images..."
-            ></textarea>
+
+            <editor-content :editor="editor" />
           </div>
 
           <div v-if="availableTags.length > 0" class="pt-2">
@@ -131,19 +143,27 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, onBeforeUnmount } from 'vue'; // Added onBeforeUnmount
 import { db, storage, auth } from '../../firebase';
 import { collection, addDoc, serverTimestamp, doc, getDoc } from 'firebase/firestore';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 
+// --- TIPTAP IMPORTS ---
+import { useEditor, EditorContent } from '@tiptap/vue-3';
+import StarterKit from '@tiptap/starter-kit';
+import Underline from '@tiptap/extension-underline';
+import { Color } from '@tiptap/extension-color';
+import { TextStyle } from '@tiptap/extension-text-style'
+
+import Image from '@tiptap/extension-image'
+
 // Component Refs
-const articleTextarea = ref(null);
 const inlineImageInput = ref(null);
 
 // Form State
 const contentType = ref('article');
 const title = ref('');
-const bodyContent = ref('');
+const bodyContent = ref(''); // This will store the HTML string from Tiptap
 const selectedFile = ref(null);
 
 // Tag State
@@ -160,6 +180,36 @@ const errorMessage = ref('');
 const isAnonymous = ref(false);
 const currentUserProfile = ref({ nickname: 'Admin', avatarUrl: '' });
 
+// --- INITIALIZE TIPTAP ---
+const editor = useEditor({
+  content: '',
+  extensions: [
+    StarterKit, 
+    Underline, 
+    TextStyle, 
+    Color,
+    Image.configure({
+      allowBase64: true, // Optional: if you ever use base64
+      HTMLAttributes: {
+        class: 'rounded-lg shadow-md my-6 max-w-full h-auto mx-auto', // Default classes for saved images
+      },
+    }),
+  ],
+  // Sync editor HTML to our bodyContent ref
+  onUpdate: ({ editor }) => {
+    bodyContent.value = editor.getHTML();
+  },
+  editorProps: {
+    attributes: {
+      class: 'prose dark:prose-invert max-w-none focus:outline-none min-h-[300px] p-4 border border-gray-300 dark:border-gray-600 rounded-b-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white',
+    },
+  },
+});
+
+onBeforeUnmount(() => {
+  editor.value.destroy();
+});
+
 onMounted(async () => {
   // Fetch Tags
   try {
@@ -175,10 +225,22 @@ onMounted(async () => {
   }
 });
 
+const MAX_FILE_SIZE = 25 * 1024 * 1024;
+
 // Capture main file for Artworks/Videos
 const handleFileUpload = (event) => {
   const file = event.target.files[0];
-  if (file) selectedFile.value = file;
+  if (!file) return;
+
+  if (file.size > MAX_FILE_SIZE) {
+    errorMessage.value = "File is too large! Maximum size allowed is 25MB.";
+    event.target.value = ''; // Reset the input
+    selectedFile.value = null;
+    return;
+  }
+
+  errorMessage.value = ''; // Clear error if size is okay
+  selectedFile.value = file;
 };
 
 // Toggle tags
@@ -191,16 +253,21 @@ const toggleTag = (tag) => {
   }
 };
 
-// --- NEW: Handle Inline Image Injection ---
+// --- UPDATED: Handle Inline Image Injection for Tiptap ---
 const handleInlineImageUpload = async (event) => {
   const file = event.target.files[0];
-  if (!file) return;
+  if (!file || !editor.value) return;
+
+  if (file.size > MAX_FILE_SIZE) {
+    errorMessage.value = "Image too large! Inline images must be under 25MB.";
+    event.target.value = '';
+    return;
+  }
 
   isUploadingInline.value = true;
   errorMessage.value = '';
 
   try {
-    // 1. Upload to Storage
     const fileExtension = file.name.split('.').pop();
     const uniqueFilename = `inline_${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExtension}`;
     const fileRef = storageRef(storage, `articles/inline/${uniqueFilename}`);
@@ -208,40 +275,20 @@ const handleInlineImageUpload = async (event) => {
     const snapshot = await uploadBytes(fileRef, file);
     const fileUrl = await getDownloadURL(snapshot.ref);
 
-    // 2. Create the HTML string with Tailwind styling classes pre-applied
-    const imageHtml = `\n<img src="${fileUrl}" alt="Article Image" class="w-full max-w-3xl mx-auto rounded-lg shadow-md my-6">\n`;
-
-    // 3. Inject it into the textarea exactly where the cursor is
-    const textarea = articleTextarea.value;
-    if (textarea) {
-      const startPos = textarea.selectionStart;
-      const endPos = textarea.selectionEnd;
-      
-      bodyContent.value = 
-        bodyContent.value.substring(0, startPos) + 
-        imageHtml + 
-        bodyContent.value.substring(endPos);
-      
-      // Move cursor to after the inserted image
-      setTimeout(() => {
-        textarea.selectionStart = textarea.selectionEnd = startPos + imageHtml.length;
-        textarea.focus();
-      }, 10);
-    } else {
-      // Fallback: just append to the end
-      bodyContent.value += imageHtml;
-    }
+    // Inject into Tiptap
+    editor.value.chain().focus().insertContent(
+      `<img src="${fileUrl}" alt="Article Image" class="w-full max-w-3xl mx-auto rounded-lg shadow-md my-6">`
+    ).run();
 
   } catch (error) {
     console.error("Inline upload failed:", error);
     errorMessage.value = "Failed to upload inline image.";
   } finally {
     isUploadingInline.value = false;
-    event.target.value = ''; // Reset the input
+    event.target.value = ''; 
   }
 };
 
-// Main submit logic
 const handleSubmit = async () => {
   isSubmitting.value = true;
   successMessage.value = '';
@@ -262,13 +309,7 @@ const handleSubmit = async () => {
       fileUrl = await getDownloadURL(snapshot.ref);
     }
 
-    // Force anonymity to false if it's not an article
     const isAnon = contentType.value === 'article' && isAnonymous.value;
-
-    // const idToken = await user.getIdTokenResult();
-    // const isAdmin = !!idToken.claims.admin;
-    // const initialStatus = isAdmin ? 'Approved' : 'Pending';
-
     const role = currentUserProfile.value.role;
     const initialStatus = role === 'admin' ? 'Approved' : 'Pending';
 
@@ -293,7 +334,6 @@ const handleSubmit = async () => {
 
     await addDoc(collection(db, 'activities'), {
         userName: currentUserProfile.value.nickname || 'Creator',
-        // Dynamic message
         actionType: role === 'admin' ? 'published a new' : 'submitted for approval a new',
         contentType: contentType.value,
         contentTitle: title.value,
@@ -303,10 +343,9 @@ const handleSubmit = async () => {
     // Reset Form
     title.value = '';
     bodyContent.value = '';
+    editor.value.commands.setContent(''); // CLEAR THE EDITOR
     selectedFile.value = null;
     selectedTags.value = [];
-    const mainFileInput = document.querySelector('input[type="file"]:not(.hidden)');
-    if (mainFileInput) mainFileInput.value = '';
     
     successMessage.value = `Successfully published new ${contentType.value}!`;
 
