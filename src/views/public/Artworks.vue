@@ -117,6 +117,20 @@
                 </template>
               </div>
 
+              <button 
+                @click="copyShareLink"
+                :class="[
+                  'flex items-center gap-2 px-4 py-2 border rounded-md shadow-sm text-sm font-bold transition-all',
+                  copyStatus === 'copied' 
+                    ? 'bg-green-900/30 border-green-800 text-green-400' 
+                    : 'bg-gray-800 border-gray-700 text-gray-300 hover:bg-gray-700 hover:text-white'
+                ]"
+              >
+                <svg v-if="copyStatus !== 'copied'" class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path></svg>
+                <svg v-else class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                {{ copyStatus === 'copied' ? 'Copied!' : 'Share' }}
+              </button>
+
               <a :href="selectedArtwork.fileUrl" target="_blank" download class="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-md font-medium transition-colors shadow-lg text-sm">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
                 Download
@@ -147,6 +161,24 @@ const route = useRoute();
 const userProfile = ref(null); 
 const currentUserId = ref(null);
 const isLoggedIn = ref(false); // 🌟 FIX: Added missing ref
+
+const copyStatus = ref(null);
+
+const copyShareLink = async () => {
+  if (!selectedArtwork.value) return;
+  
+  // Notice this points to /artworks
+  const url = `${window.location.origin}/artworks?id=${selectedArtwork.value.id}`;
+  
+  try {
+    await navigator.clipboard.writeText(url);
+    copyStatus.value = 'copied';
+    setTimeout(() => { copyStatus.value = null; }, 2000);
+  } catch (err) {
+    console.error('Failed to copy!', err);
+    alert("Failed to copy link. Please copy the URL from your browser.");
+  }
+};
 
 const userReaction = computed(() => {
   if (!selectedArtwork.value || !currentUserId.value) return null;

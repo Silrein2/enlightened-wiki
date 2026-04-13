@@ -18,42 +18,60 @@
         
         <div class="flex flex-col sm:flex-row sm:items-center justify-between mt-6 gap-6">
             <div class="flex items-center">
-            <div class="shrink-0 mr-3">
-                <img v-if="selectedArticle.authorAvatar" :src="selectedArticle.authorAvatar" class="h-10 w-10 rounded-full object-cover border border-gray-200 dark:border-gray-700" alt="Author Avatar">
-                <div v-else class="h-10 w-10 rounded-full bg-gray-300 dark:bg-gray-600 flex items-center justify-center text-gray-500 dark:text-gray-400">
-                <svg class="h-6 w-6" fill="currentColor" viewBox="0 0 24 24"><path d="M24 20.993V24H0v-2.996A14.977 14.977 0 0112.004 15c4.904 0 9.26 2.354 11.996 5.993zM16.002 8.999a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
-                </div>
-            </div>
-            
-            <div>
-                <p class="text-sm font-medium text-gray-900 dark:text-white">
-                Written by {{ selectedArticle.authorName || 'Unknown' }}
-                </p>
-                
-                <div class="flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400 mt-1">
-                <time>{{ formatDate(selectedArticle.createdAt) }}</time>
-                
-                <template v-if="selectedArticle.lastEditedBy">
-                    <span class="hidden sm:inline">&bull;</span>
-                    <button 
-                    @click="fetchHistory"
-                    class="text-indigo-600 dark:text-indigo-400 hover:underline font-medium"
-                    >
-                    Last edited by {{ selectedArticle.lastEditedBy }}
-                    </button>
-                </template>
-                </div>
-            </div>
+              <div class="shrink-0 mr-3">
+                  <img v-if="selectedArticle.authorAvatar" :src="selectedArticle.authorAvatar" class="h-10 w-10 rounded-full object-cover border border-gray-200 dark:border-gray-700" alt="Author Avatar">
+                  <div v-else class="h-10 w-10 rounded-full bg-gray-300 dark:bg-gray-600 flex items-center justify-center text-gray-500 dark:text-gray-400">
+                  <svg class="h-6 w-6" fill="currentColor" viewBox="0 0 24 24"><path d="M24 20.993V24H0v-2.996A14.977 14.977 0 0112.004 15c4.904 0 9.26 2.354 11.996 5.993zM16.002 8.999a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
+                  </div>
+              </div>
+              
+              <div>
+                  <p class="text-sm font-medium text-gray-900 dark:text-white">
+                  Written by {{ selectedArticle.authorName || 'Unknown' }}
+                  </p>
+                  
+                  <div class="flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  <time>{{ formatDate(selectedArticle.createdAt) }}</time>
+                  
+                  <template v-if="selectedArticle.lastEditedBy">
+                      <span class="hidden sm:inline">&bull;</span>
+                      <button 
+                      @click="fetchHistory"
+                      class="text-indigo-600 dark:text-indigo-400 hover:underline font-medium"
+                      >
+                      Last edited by {{ selectedArticle.lastEditedBy }}
+                      </button>
+                  </template>
+                  </div>
+              </div>
             </div>
 
-            <router-link 
-            v-if="isLoggedIn"
-            :to="`/dashboard/edit/${selectedArticle.id}`"
-            class="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-xs font-bold text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-indigo-600 hover:text-white dark:hover:bg-indigo-600 transition-all"
-            >
-            <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
-            Edit Article
-            </router-link>
+            <div class="flex items-center gap-3"> 
+              
+              <button 
+                @click="copyShareLink"
+                :class="[
+                  'inline-flex items-center px-4 py-2 border rounded-md shadow-sm text-xs font-bold transition-all',
+                  copyStatus === 'copied' 
+                    ? 'bg-green-50 border-green-200 text-green-700 dark:bg-green-900/30 dark:border-green-800 dark:text-green-400' 
+                    : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50 dark:bg-gray-800 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700'
+                ]"
+              >
+                <svg v-if="copyStatus !== 'copied'" class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path></svg>
+                <svg v-else class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                {{ copyStatus === 'copied' ? 'Link Copied!' : 'Share Link' }}
+              </button>
+
+              <router-link 
+                v-if="isLoggedIn"
+                :to="`/dashboard/edit/${selectedArticle.id}`"
+                class="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-xs font-bold text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-indigo-600 hover:text-white dark:hover:bg-indigo-600 transition-all"
+              >
+                <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                Edit Article
+              </router-link>
+
+            </div>
         </div>
 
         <div class="mt-6 flex flex-wrap gap-2" v-if="selectedArticle.tags && selectedArticle.tags.length > 0">
@@ -239,6 +257,29 @@ const history = ref([]);
 // 🌟 NEW: Auth & Reaction Refs
 const userProfile = ref(null); 
 const currentUserId = ref(null);
+
+const copyStatus = ref(null);
+
+// 🌟 NEW: The Clipboard logic
+const copyShareLink = async () => {
+  if (!selectedArticle.value) return;
+  
+  // Construct the full URL using the current domain + path + the article's ID
+  const url = `${window.location.origin}/articles?id=${selectedArticle.value.id}`;
+  
+  try {
+    await navigator.clipboard.writeText(url);
+    copyStatus.value = 'copied';
+    
+    // Reset the button text after 2 seconds
+    setTimeout(() => {
+      copyStatus.value = null;
+    }, 2000);
+  } catch (err) {
+    console.error('Failed to copy!', err);
+    alert("Failed to copy link. Please copy the URL from your browser.");
+  }
+};
 
 // 🌟 NEW: Computed properties for Reactions
 const userReaction = computed(() => {

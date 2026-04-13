@@ -1,5 +1,5 @@
 <template>
-  <div class="max-w-4xl mx-auto bg-white dark:bg-gray-800 shadow-md rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">
+  <div class="max-w-4xl mx-auto bg-white dark:bg-gray-800 shadow-md rounded-lg border border-gray-200 dark:border-gray-700">
     <div class="px-6 py-8">
       <h2 class="text-2xl font-bold text-gray-900 dark:text-white mb-6">Create New Content</h2>
 
@@ -39,7 +39,7 @@
           <div>
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Article Content</label>
             
-            <div class="flex flex-wrap items-center gap-1 p-2 bg-gray-50 dark:bg-gray-900 border border-b-0 border-gray-300 dark:border-gray-600 rounded-t-md">
+            <div class="sticky top-0 z-10 flex flex-wrap items-center gap-1 p-2 bg-gray-50 dark:bg-gray-900 border border-b-0 border-gray-300 dark:border-gray-600 rounded-t-md">
               <button type="button" @click="editor.chain().focus().toggleBold().run()" :class="{'bg-indigo-600 text-white': editor?.isActive('bold')}" class="p-1.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 4h8a4 4 0 014 4 4 4 0 01-4 4H6zM6 12h9a4 4 0 014 4 4 4 0 01-4 4H6z"></path></svg>
               </button>
