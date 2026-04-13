@@ -56,6 +56,14 @@
                 <span class="text-xs font-bold">— Line</span>
               </button>
 
+              <button type="button" @click="editor.chain().focus().toggleBulletList().run()" :class="{'bg-indigo-600 text-white': editor?.isActive('bulletList')}" class="p-1.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors" title="Bullet List">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"></path></svg>
+              </button>
+
+              <button type="button" @click="editor.chain().focus().toggleOrderedList().run()" :class="{'bg-indigo-600 text-white': editor?.isActive('orderedList')}" class="p-1.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors" title="Numbered List">
+                <span class="font-bold px-1 text-sm dark:text-white">1.</span>
+              </button>
+
               <div class="w-px h-6 bg-gray-300 dark:bg-gray-600 mx-1"></div>
 
               <input 
@@ -68,6 +76,7 @@
               <div class="w-px h-6 bg-gray-300 dark:bg-gray-600 mx-1"></div>
 
               <select 
+                :value="editor?.getAttributes('textStyle').fontSize || ''"
                 @change="editor.chain().focus().setFontSize($event.target.value).run()"
                 class="bg-transparent border border-gray-300 dark:border-gray-600 rounded px-2 py-1 text-xs font-medium text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
                 title="Font Size"
@@ -234,7 +243,14 @@ const FontSize = Extension.create({
 const editor = useEditor({
   content: '',
   extensions: [
-    StarterKit, 
+    StarterKit.configure({
+      horizontalRule: {
+        HTMLAttributes: {
+          // The '!' forces Tailwind to override the prose defaults
+          class: 'my-8 !border-t-[3px] !border-gray-400 dark:!border-gray-500 !opacity-100',
+        },
+      },
+    }), 
     Underline, 
     TextStyle, 
     Color,

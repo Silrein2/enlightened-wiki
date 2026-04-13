@@ -16,10 +16,11 @@ const routes = [
       { path: 'articles', name: 'Articles', component: () => import('../views/public/Articles.vue') },
       { path: 'artworks', name: 'Artworks', component: () => import('../views/public/Artworks.vue') },
       { path: 'videos', name: 'Videos', component: () => import('../views/public/Videos.vue') },
+
       { path: 'login', name: 'Login', component: () => import('../views/public/Login.vue') },
-      // ADD THIS NEW ROUTE:
       { path: 'search', name: 'Search', component: () => import('../views/public/SearchResults.vue') },
-      { path: '/register', name: 'Register', component: () => import('../views/public/Register.vue') }
+      { path: '/register', name: 'Register', component: () => import('../views/public/Register.vue') },
+      { path: 'feedback', name: 'Feedback', component: () => import('../components/Feedback.vue') }
     ]
   },
 

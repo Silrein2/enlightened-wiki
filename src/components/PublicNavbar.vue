@@ -43,6 +43,7 @@
           <router-link to="/articles" class="text-gray-700 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400 px-3 py-2 text-sm font-medium transition-colors">Articles</router-link>
           <router-link to="/artworks" class="text-gray-700 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400 px-3 py-2 text-sm font-medium transition-colors">Artworks</router-link>
           <router-link to="/videos" class="text-gray-700 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400 px-3 py-2 text-sm font-medium transition-colors">Videos</router-link>
+          <router-link to="/feedback" class="text-gray-700 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400 px-3 py-2 text-sm font-medium transition-colors">Feedback</router-link>
         </nav>
 
         <div class="flex-1 flex justify-end md:ml-6">

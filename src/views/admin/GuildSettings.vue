@@ -38,29 +38,47 @@
         </div>
       </div>
 
-      <div class="mt-10 pt-8 border-t border-gray-200 dark:border-gray-700 space-y-4">
-        <h3 class="text-lg font-medium text-gray-900 dark:text-white">Discord Webhook Integration</h3>
-        <p class="text-sm text-gray-500 dark:text-gray-400">
-          Set the webhook URL to receive notifications in Discord when someone requests a new Creator Token.
-        </p>
+      <div class="mt-10 pt-8 border-t border-gray-200 dark:border-gray-700 space-y-6">
+        <div>
+          <h3 class="text-lg font-medium text-gray-900 dark:text-white">Discord Webhook Integrations</h3>
+          <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
+            Set up Discord routing for automated notifications.
+          </p>
+        </div>
         
-        <form @submit.prevent="saveWebhook" class="flex flex-col gap-3">
-          <input 
-            v-model="webhookUrl" 
-            type="url" 
-            placeholder="https://discord.com/api/webhooks/..." 
-            class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-white"
-          >
-          <div class="flex items-center gap-4">
+        <form @submit.prevent="saveWebhooks" class="space-y-5">
+          <div class="bg-gray-50 dark:bg-gray-900 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
+            <label class="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Creator Token Requests</label>
+            <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">Alerts Admins when someone requests a creator account.</p>
+            <input 
+              v-model="tokenWebhookUrl" 
+              type="url" 
+              placeholder="https://discord.com/api/webhooks/..." 
+              class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-800 dark:text-white text-sm"
+            >
+          </div>
+
+          <div class="bg-gray-50 dark:bg-gray-900 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
+            <label class="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Public User Feedback</label>
+            <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">Routes bug reports and suggestions straight to the developer.</p>
+            <input 
+              v-model="feedbackWebhookUrl" 
+              type="url" 
+              placeholder="https://discord.com/api/webhooks/..." 
+              class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-800 dark:text-white text-sm"
+            >
+          </div>
+
+          <div class="flex items-center gap-4 pt-2">
             <button 
               type="submit" 
-              :disabled="isSavingWebhook"
-              class="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50 transition-colors font-medium text-sm"
+              :disabled="isSavingWebhooks"
+              class="px-6 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50 transition-colors font-bold text-sm shadow-sm"
             >
-              {{ isSavingWebhook ? 'Saving...' : 'Save Webhook URL' }}
+              {{ isSavingWebhooks ? 'Saving...' : 'Save All Webhooks' }}
             </button>
-            <span v-if="webhookSaveStatus" class="text-sm font-medium text-green-600 dark:text-green-400 transition-opacity">
-              {{ webhookSaveStatus }}
+            <span v-if="webhooksSaveStatus" class="text-sm font-bold text-green-600 dark:text-green-400 transition-opacity">
+              {{ webhooksSaveStatus }}
             </span>
           </div>
         </form>
@@ -90,9 +108,10 @@ const userProfile = ref(null);
 const tagsDocRef = doc(db, 'config', 'tags');
 
 // 🌟 NEW: Webhook State
-const webhookUrl = ref('');
-const isSavingWebhook = ref(false);
-const webhookSaveStatus = ref('');
+const tokenWebhookUrl = ref('');     
+const feedbackWebhookUrl = ref('');  
+const isSavingWebhooks = ref(false);
+const webhooksSaveStatus = ref('');
 const guildSettingsRef = doc(db, 'settings', 'guild');
 
 onMounted(async () => {
@@ -104,8 +123,10 @@ onMounted(async () => {
 
   // 🌟 NEW: Fetch current Webhook URL
   const settingsSnap = await getDoc(guildSettingsRef);
-  if (settingsSnap.exists() && settingsSnap.data().discordWebhook) {
-    webhookUrl.value = settingsSnap.data().discordWebhook;
+  if (settingsSnap.exists()) {
+    const data = settingsSnap.data();
+    if (data.discordWebhook) tokenWebhookUrl.value = data.discordWebhook;
+    if (data.feedbackWebhook) feedbackWebhookUrl.value = data.feedbackWebhook;
   }
 
   // 2. Fetch admin profile for activity logging
@@ -170,37 +191,32 @@ const removeTag = async (tagToRemove) => {
 };
 
 // 🌟 NEW: Webhook Save Function
-const saveWebhook = async () => {
-  isSavingWebhook.value = true;
-  webhookSaveStatus.value = '';
+const saveWebhooks = async () => {
+  isSavingWebhooks.value = true;
+  webhooksSaveStatus.value = '';
 
   try {
-    // Using setDoc with merge: true so it creates the 'settings/guild' document if it doesn't exist yet
     await setDoc(guildSettingsRef, {
-      discordWebhook: webhookUrl.value.trim()
+      discordWebhook: tokenWebhookUrl.value.trim(),  // Keeping original DB key to not break Login.vue
+      feedbackWebhook: feedbackWebhookUrl.value.trim() // New DB key
     }, { merge: true });
 
-    // Log Activity
     await addDoc(collection(db, 'activities'), {
       userName: userProfile.value?.nickname || 'Admin',
       actionType: 'updated the Guild Settings',
       contentType: 'setting',
-      contentTitle: 'Discord Webhook',
+      contentTitle: 'Discord Webhooks',
       timestamp: serverTimestamp()
     });
 
-    webhookSaveStatus.value = 'Webhook updated successfully!';
-    
-    // Clear the success message after 3 seconds
-    setTimeout(() => {
-      webhookSaveStatus.value = '';
-    }, 3000);
+    webhooksSaveStatus.value = 'Webhooks updated successfully!';
+    setTimeout(() => { webhooksSaveStatus.value = ''; }, 3000);
 
   } catch (error) {
-    console.error("Error saving webhook:", error);
-    webhookSaveStatus.value = 'Failed to save webhook.';
+    console.error("Error saving webhooks:", error);
+    webhooksSaveStatus.value = 'Failed to save webhooks.';
   } finally {
-    isSavingWebhook.value = false;
+    isSavingWebhooks.value = false;
   }
 };
 
