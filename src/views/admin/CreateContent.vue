@@ -67,6 +67,21 @@
 
               <div class="w-px h-6 bg-gray-300 dark:bg-gray-600 mx-1"></div>
 
+              <select 
+                @change="editor.chain().focus().setFontSize($event.target.value).run()"
+                class="bg-transparent border border-gray-300 dark:border-gray-600 rounded px-2 py-1 text-xs font-medium text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
+                title="Font Size"
+              >
+                <option value="">Default Size</option>
+                <option value="12px">12px (Small)</option>
+                <option value="16px">16px (Normal)</option>
+                <option value="20px">20px (Large)</option>
+                <option value="24px">24px (Title)</option>
+                <option value="32px">32px (Huge)</option>
+              </select>
+
+              <div class="w-px h-6 bg-gray-300 dark:bg-gray-600 mx-1"></div>
+
               <input type="file" ref="inlineImageInput" @change="handleInlineImageUpload" accept="image/*" class="hidden">
               <button 
                 type="button" 
@@ -154,8 +169,9 @@ import StarterKit from '@tiptap/starter-kit';
 import Underline from '@tiptap/extension-underline';
 import { Color } from '@tiptap/extension-color';
 import { TextStyle } from '@tiptap/extension-text-style'
-
 import Image from '@tiptap/extension-image'
+
+import { Extension } from '@tiptap/core';
 
 // Component Refs
 const inlineImageInput = ref(null);
@@ -180,6 +196,40 @@ const errorMessage = ref('');
 const isAnonymous = ref(false);
 const currentUserProfile = ref({ nickname: 'Admin', avatarUrl: '' });
 
+const FontSize = Extension.create({
+  name: 'fontSize',
+  addOptions() {
+    return { types: ['textStyle'] };
+  },
+  addGlobalAttributes() {
+    return [
+      {
+        types: this.options.types,
+        attributes: {
+          fontSize: {
+            default: null,
+            parseHTML: element => element.style.fontSize || null,
+            renderHTML: attributes => {
+              if (!attributes.fontSize) return {};
+              return { style: `font-size: ${attributes.fontSize}` };
+            },
+          },
+        },
+      },
+    ];
+  },
+  addCommands() {
+    return {
+      setFontSize: fontSize => ({ chain }) => {
+        return chain().setMark('textStyle', { fontSize }).run();
+      },
+      unsetFontSize: () => ({ chain }) => {
+        return chain().setMark('textStyle', { fontSize: null }).removeEmptyTextStyle().run();
+      },
+    };
+  },
+});
+
 // --- INITIALIZE TIPTAP ---
 const editor = useEditor({
   content: '',
@@ -188,6 +238,7 @@ const editor = useEditor({
     Underline, 
     TextStyle, 
     Color,
+    FontSize,
     Image.configure({
       allowBase64: true, // Optional: if you ever use base64
       HTMLAttributes: {
