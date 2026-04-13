@@ -5,7 +5,7 @@
 
     <div class="fixed bottom-4 left-4 z-50 pointer-events-none select-none">
       <span class="text-[10px] font-mono font-bold tracking-widest text-gray-400/60 dark:text-gray-600/50 uppercase">
-        Enlightened Wiki v1.1.0-P2-silrein
+        Enlightened Wiki v1.1.1-P2-silrein
       </span>
     </div>
 
