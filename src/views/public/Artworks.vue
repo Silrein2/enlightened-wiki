@@ -18,6 +18,8 @@
           <option value="date-asc">Oldest First</option>
           <option value="name-asc">Name (A-Z)</option>
           <option value="name-desc">Name (Z-A)</option>
+          <option value="likes-desc">Most Likes</option>
+          <option value="likes-asc">Least Likes</option>
         </select>
       </div>
     </div>
@@ -44,9 +46,15 @@
         </div>
         <div class="p-3 mt-auto">
           <h3 class="text-sm font-bold text-gray-900 dark:text-white truncate" :title="artwork.title">{{ artwork.title }}</h3>
-          <p class="text-xs text-gray-500 dark:text-gray-400 mt-1 truncate">
-            By {{ artwork.authorName || 'Unknown' }} &bull; {{ formatDate(artwork.createdAt) }}
-          </p>
+          
+          <div class="flex items-center justify-between mt-1">
+            <p class="text-xs text-gray-500 dark:text-gray-400 truncate">
+              By {{ artwork.authorName || 'Unknown' }} &bull; {{ formatDate(artwork.createdAt) }}
+            </p>
+            <span v-if="(artwork.reactionCount || 0) > 0" class="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap ml-2">
+               ❤️ {{ artwork.reactionCount }}
+            </span>
+          </div>
         </div>
       </div>
     </div>
@@ -64,7 +72,7 @@
         <div class="max-w-5xl w-full flex flex-col items-center">
           <img :src="selectedArtwork.fileUrl" :alt="selectedArtwork.title" class="max-h-[80vh] w-auto object-contain rounded shadow-2xl">
           
-          <div class="w-full flex items-center justify-between mt-6 bg-gray-900/80 p-4 rounded-lg border border-gray-700">
+          <div class="w-full flex flex-col lg:flex-row lg:items-center justify-between mt-6 bg-gray-900/80 p-4 rounded-lg border border-gray-700 gap-4">
             <div class="flex items-center gap-4">
               <img v-if="selectedArtwork.authorAvatar" :src="selectedArtwork.authorAvatar" class="h-12 w-12 rounded-full object-cover border-2 border-gray-600 bg-gray-800">
               <div v-else class="h-12 w-12 rounded-full bg-gray-700 flex items-center justify-center text-gray-400 border-2 border-gray-600">
@@ -76,12 +84,45 @@
                 <p class="text-sm text-gray-400 mt-1">Uploaded by <span class="text-indigo-400">{{ selectedArtwork.authorName || 'Unknown' }}</span> on {{ formatDate(selectedArtwork.createdAt) }}</p>
               </div>
             </div>
-            
-            <a :href="selectedArtwork.fileUrl" target="_blank" download class="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-md font-medium transition-colors shadow-lg">
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
-              Download
-            </a>
-          </div>
+
+            <div class="flex items-center flex-wrap gap-4">
+              <div class="flex items-center gap-2 border-r border-gray-700 pr-4 mr-2">
+                <template v-if="userProfile && (userProfile.role === 'admin' || userProfile.role === 'creator')">
+                  <button 
+                    @click="toggleReaction('heart')"
+                    :class="[
+                      'flex items-center gap-2 px-3 py-1.5 rounded-full border transition-all text-sm',
+                      userReaction === 'heart' ? 'bg-red-900/30 border-red-800 text-red-500' : 'bg-gray-800 border-gray-700 text-gray-400 hover:bg-gray-700'
+                    ]"
+                  >
+                    <span>❤️</span> <span class="font-bold">{{ heartCount }}</span>
+                  </button>
+
+                  <button 
+                    @click="toggleReaction('laugh')"
+                    :class="[
+                      'flex items-center gap-2 px-3 py-1.5 rounded-full border transition-all text-sm',
+                      userReaction === 'laugh' ? 'bg-yellow-900/30 border-yellow-800 text-yellow-500' : 'bg-gray-800 border-gray-700 text-gray-400 hover:bg-gray-700'
+                    ]"
+                  >
+                    <span>😂</span> <span class="font-bold">{{ laughCount }}</span>
+                  </button>
+                </template>
+                
+                <template v-else>
+                  <div class="flex items-center gap-4 text-gray-400 text-sm">
+                    <span class="flex items-center gap-1">❤️ {{ heartCount }}</span>
+                    <span class="flex items-center gap-1">😂 {{ laughCount }}</span>
+                  </div>
+                </template>
+              </div>
+
+              <a :href="selectedArtwork.fileUrl" target="_blank" download class="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-md font-medium transition-colors shadow-lg text-sm">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                Download
+              </a>
+            </div>
+            </div>
         </div>
       </div>
     </Teleport>
@@ -92,16 +133,36 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
-import { db } from '../../firebase';
-import { collection, getDocs, query, orderBy, where } from 'firebase/firestore';
+// 🌟 FIX: Added missing auth imports
+import { db, auth } from '../../firebase';
+import { onAuthStateChanged } from 'firebase/auth';
+import { collection, getDocs, query, orderBy, limit, where, doc, getDoc, updateDoc } from 'firebase/firestore';
 
 const artworks = ref([]);
 const isLoading = ref(true);
-const sortBy = ref('date-desc'); // Default sort
-const selectedArtwork = ref(null); // Holds the currently viewed artwork
+const sortBy = ref('date-desc');
+const selectedArtwork = ref(null);
 const route = useRoute();
 
-// Fetch all artworks once on load
+const userProfile = ref(null); 
+const currentUserId = ref(null);
+const isLoggedIn = ref(false); // 🌟 FIX: Added missing ref
+
+const userReaction = computed(() => {
+  if (!selectedArtwork.value || !currentUserId.value) return null;
+  return selectedArtwork.value.reactions?.[currentUserId.value] || null;
+});
+
+const heartCount = computed(() => {
+  if (!selectedArtwork.value?.reactions) return 0;
+  return Object.values(selectedArtwork.value.reactions).filter(r => r === 'heart').length;
+});
+
+const laughCount = computed(() => {
+  if (!selectedArtwork.value?.reactions) return 0;
+  return Object.values(selectedArtwork.value.reactions).filter(r => r === 'laugh').length;
+});
+
 onMounted(async () => {
   try {
     const q = query(
@@ -119,53 +180,106 @@ onMounted(async () => {
     
     artworks.value = results;
 
-    // --- NEW DEEP LINK LOGIC ---
-    // If the URL has ?id=something, find it and open the modal
     if (route.query.id) {
       const targetArtwork = artworks.value.find(a => a.id === route.query.id);
       if (targetArtwork) {
         openModal(targetArtwork);
       }
     }
-    // ---------------------------
 
   } catch (error) {
     console.error("Error fetching artworks:", error);
   } finally {
     isLoading.value = false;
   }
+
+  onAuthStateChanged(auth, async (user) => {
+    isLoggedIn.value = !!user;
+    if (user) {
+      currentUserId.value = user.uid;
+      const profileSnap = await getDoc(doc(db, 'users', user.uid));
+      if (profileSnap.exists()) {
+        userProfile.value = profileSnap.data();
+      }
+    } else {
+      currentUserId.value = null;
+      userProfile.value = null;
+    }
+  });
 });
 
-// The Sorting Engine (Runs instantly in the browser)
 const sortedArtworks = computed(() => {
-  // Create a copy of the array so we don't mutate the original
   return [...artworks.value].sort((a, b) => {
-    // Handle cases where createdAt might be missing or pending
     const timeA = a.createdAt ? a.createdAt.toMillis() : 0;
     const timeB = b.createdAt ? b.createdAt.toMillis() : 0;
     const titleA = a.title.toLowerCase();
     const titleB = b.title.toLowerCase();
 
+    const likesA = a.reactionCount || 0; 
+    const likesB = b.reactionCount || 0;
+
     if (sortBy.value === 'date-desc') return timeB - timeA;
     if (sortBy.value === 'date-asc') return timeA - timeB;
     if (sortBy.value === 'name-asc') return titleA.localeCompare(titleB);
     if (sortBy.value === 'name-desc') return titleB.localeCompare(titleA);
+
+    if (sortBy.value === 'likes-desc') {
+      if (likesB === likesA) return timeB - timeA;
+      return likesB - likesA;
+    }
+    if (sortBy.value === 'likes-asc') {
+      if (likesA === likesB) return timeB - timeA; 
+      return likesA - likesB;
+    }
+
     return 0;
   });
 });
 
-// Modal Logic
+const toggleReaction = async (type) => {
+  if (!selectedArtwork.value || !currentUserId.value) return;
+
+  const artworkId = selectedArtwork.value.id;
+  const currentReactions = selectedArtwork.value.reactions || {};
+  let newReactions = { ...currentReactions };
+
+  if (newReactions[currentUserId.value] === type) {
+    delete newReactions[currentUserId.value];
+  } else {
+    newReactions[currentUserId.value] = type;
+  }
+
+  const totalCount = Object.keys(newReactions).length;
+
+  selectedArtwork.value.reactions = newReactions;
+  selectedArtwork.value.reactionCount = totalCount;
+
+  const artworkIndex = artworks.value.findIndex(a => a.id === artworkId);
+  if (artworkIndex !== -1) {
+    artworks.value[artworkIndex].reactions = newReactions;
+    artworks.value[artworkIndex].reactionCount = totalCount;
+  }
+
+  try {
+    await updateDoc(doc(db, 'artworks', artworkId), {
+      reactions: newReactions,
+      reactionCount: totalCount
+    });
+  } catch (error) {
+    console.error("Failed to save reaction:", error);
+  }
+};
+
 const openModal = (artwork) => {
   selectedArtwork.value = artwork;
-  document.body.style.overflow = 'hidden'; // Prevent background scrolling when modal is open
+  document.body.style.overflow = 'hidden';
 };
 
 const closeModal = () => {
   selectedArtwork.value = null;
-  document.body.style.overflow = 'auto'; // Restore scrolling
+  document.body.style.overflow = 'auto';
 };
 
-// Date Formatter
 const formatDate = (timestamp) => {
   if (!timestamp) return 'Just now';
   const date = timestamp.toDate();

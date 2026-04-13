@@ -72,7 +72,42 @@
         v-html="selectedArticle.content"
       >
       </div>
-    </div>
+
+      <div class="mt-12 pt-6 border-t border-gray-200 dark:border-gray-800 flex items-center justify-between">
+        <div class="flex items-center gap-4">
+          <template v-if="userProfile && (userProfile.role === 'admin' || userProfile.role === 'creator')">
+            <button 
+              @click="toggleReaction('heart')"
+              :class="[
+                'flex items-center gap-2 px-4 py-2 rounded-full border transition-all',
+                userReaction === 'heart' ? 'bg-red-50 border-red-200 text-red-600 dark:bg-red-900/30 dark:border-red-800' : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50 dark:bg-gray-800 dark:border-gray-700 dark:hover:bg-gray-700'
+              ]"
+            >
+              <span class="text-xl">❤️</span>
+              <span class="font-bold">{{ heartCount }}</span>
+            </button>
+
+            <button 
+              @click="toggleReaction('laugh')"
+              :class="[
+                'flex items-center gap-2 px-4 py-2 rounded-full border transition-all',
+                userReaction === 'laugh' ? 'bg-yellow-50 border-yellow-200 text-yellow-600 dark:bg-yellow-900/30 dark:border-yellow-800' : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50 dark:bg-gray-800 dark:border-gray-700 dark:hover:bg-gray-700'
+              ]"
+            >
+              <span class="text-xl">😂</span>
+              <span class="font-bold">{{ laughCount }}</span>
+            </button>
+          </template>
+          
+          <template v-else>
+            <div class="flex items-center gap-4 text-gray-500 dark:text-gray-400">
+              <span class="flex items-center gap-1"><span class="text-xl">❤️</span> {{ heartCount }}</span>
+              <span class="flex items-center gap-1"><span class="text-xl">😂</span> {{ laughCount }}</span>
+            </div>
+          </template>
+        </div>
+      </div>
+      </div>
 
     <div v-else>
       
@@ -93,7 +128,9 @@
             <option value="date-asc">Oldest First</option>
             <option value="name-asc">Title (A-Z)</option>
             <option value="name-desc">Title (Z-A)</option>
-          </select>
+            <option value="likes-desc">Most Likes</option>
+            <option value="likes-asc">Least Likes</option>
+            </select>
         </div>
       </div>
 
@@ -146,17 +183,25 @@
             {{ formatDate(article.createdAt) }}
           </p>
           
-          <div v-if="article.tags && article.tags.length > 0" class="flex flex-wrap gap-2 mt-auto">
-            <span 
-              v-for="tag in article.tags.slice(0, 3)" 
-              :key="tag" 
-              class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300"
-            >
-              {{ tag }}
-            </span>
-            <span v-if="article.tags.length > 3" class="text-xs text-gray-500">...</span>
+          <div class="mt-auto flex items-center justify-between">
+            <div v-if="article.tags && article.tags.length > 0" class="flex flex-wrap gap-2">
+              <span 
+                v-for="tag in article.tags.slice(0, 3)" 
+                :key="tag" 
+                class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300"
+              >
+                {{ tag }}
+              </span>
+              <span v-if="article.tags.length > 3" class="text-xs text-gray-500">...</span>
+            </div>
+            
+            <div class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap ml-2">
+              <span v-if="(article.reactionCount || 0) > 0">
+                 {{ article.reactionCount }} Likes
+              </span>
+            </div>
           </div>
-        </div>
+          </div>
       </div>
 
       <div v-if="!isLoading && sortedAndFilteredArticles.length === 0" class="text-center py-20">
@@ -175,7 +220,8 @@ import { ref, computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { db, auth } from '../../firebase';
 import { onAuthStateChanged } from 'firebase/auth';
-import { collection, getDocs, query, orderBy, limit, where } from 'firebase/firestore';
+// 🌟 NEW: Added doc, getDoc, updateDoc to imports
+import { collection, getDocs, query, orderBy, limit, where, doc, getDoc, updateDoc } from 'firebase/firestore'; 
 
 const route = useRoute();
 const router = useRouter();
@@ -189,6 +235,27 @@ const selectedArticle = ref(null);
 const isLoggedIn = ref(false);
 const showHistory = ref(false);
 const history = ref([]);
+
+// 🌟 NEW: Auth & Reaction Refs
+const userProfile = ref(null); 
+const currentUserId = ref(null);
+
+// 🌟 NEW: Computed properties for Reactions
+const userReaction = computed(() => {
+  if (!selectedArticle.value || !currentUserId.value) return null;
+  return selectedArticle.value.reactions?.[currentUserId.value] || null;
+});
+
+const heartCount = computed(() => {
+  if (!selectedArticle.value?.reactions) return 0;
+  return Object.values(selectedArticle.value.reactions).filter(r => r === 'heart').length;
+});
+
+const laughCount = computed(() => {
+  if (!selectedArticle.value?.reactions) return 0;
+  return Object.values(selectedArticle.value.reactions).filter(r => r === 'laugh').length;
+});
+// 🌟 END NEW: Computed properties
 
 onMounted(async () => {
   try {
@@ -206,7 +273,6 @@ onMounted(async () => {
     
     articles.value = results;
 
-    // Check for deep link (?id=...)
     if (route.query.id) {
       const target = articles.value.find(a => a.id === route.query.id);
       if (target) {
@@ -220,26 +286,75 @@ onMounted(async () => {
     isLoading.value = false;
   }
 
-  onAuthStateChanged(auth, (user) => {
+  // 🌟 NEW: Updated Auth Listener to fetch profile data
+  onAuthStateChanged(auth, async (user) => {
     isLoggedIn.value = !!user;
+    if (user) {
+      currentUserId.value = user.uid;
+      const profileSnap = await getDoc(doc(db, 'users', user.uid));
+      if (profileSnap.exists()) {
+        userProfile.value = profileSnap.data();
+      }
+    } else {
+      currentUserId.value = null;
+      userProfile.value = null;
+    }
   });
+  // 🌟 END NEW: Auth Listener
 });
 
 const fetchHistory = async () => {
   showHistory.value = true;
-  if (history.value.length > 0) return; // Don't fetch twice
+  if (history.value.length > 0) return; 
 
   const q = query(
     collection(db, 'articles', selectedArticle.value.id, 'revisions'),
     orderBy('timestamp', 'desc'),
-    limit(10) // Show last 10 edits
+    limit(10)
   );
   
   const snap = await getDocs(q);
   history.value = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 };
 
-// Automatically extract all unique tags from the downloaded articles
+// 🌟 NEW: Reaction Toggle Function
+const toggleReaction = async (type) => {
+  if (!selectedArticle.value || !currentUserId.value) return;
+
+  const articleId = selectedArticle.value.id;
+  const currentReactions = selectedArticle.value.reactions || {};
+  let newReactions = { ...currentReactions };
+
+  if (newReactions[currentUserId.value] === type) {
+    delete newReactions[currentUserId.value];
+  } else {
+    newReactions[currentUserId.value] = type;
+  }
+
+  const totalCount = Object.keys(newReactions).length;
+
+  // Optimistic UI Update
+  selectedArticle.value.reactions = newReactions;
+  selectedArticle.value.reactionCount = totalCount;
+
+  const articleIndex = articles.value.findIndex(a => a.id === articleId);
+  if (articleIndex !== -1) {
+    articles.value[articleIndex].reactions = newReactions;
+    articles.value[articleIndex].reactionCount = totalCount;
+  }
+
+  // Sync to Database
+  try {
+    await updateDoc(doc(db, 'articles', articleId), {
+      reactions: newReactions,
+      reactionCount: totalCount
+    });
+  } catch (error) {
+    console.error("Failed to save reaction:", error);
+  }
+};
+// 🌟 END NEW: Reaction Function
+
 const activeTags = computed(() => {
   const tags = new Set();
   articles.value.forEach(article => {
@@ -250,9 +365,7 @@ const activeTags = computed(() => {
   return Array.from(tags).sort();
 });
 
-// The Sorting & Filtering Engine
 const sortedAndFilteredArticles = computed(() => {
-  // 1. Filter by tag (if one is selected)
   let filtered = [...articles.value];
   if (selectedFilterTag.value !== '') {
     filtered = filtered.filter(article => 
@@ -260,32 +373,44 @@ const sortedAndFilteredArticles = computed(() => {
     );
   }
 
-  // 2. Sort the remaining results
   return filtered.sort((a, b) => {
     const timeA = a.createdAt ? a.createdAt.toMillis() : 0;
     const timeB = b.createdAt ? b.createdAt.toMillis() : 0;
     const titleA = a.title.toLowerCase();
     const titleB = b.title.toLowerCase();
+    
+    // 🌟 NEW: Variables for sorting logic
+    const likesA = a.reactionCount || 0; 
+    const likesB = b.reactionCount || 0;
 
     if (sortBy.value === 'date-desc') return timeB - timeA;
     if (sortBy.value === 'date-asc') return timeA - timeB;
     if (sortBy.value === 'name-asc') return titleA.localeCompare(titleB);
     if (sortBy.value === 'name-desc') return titleB.localeCompare(titleA);
+    
+    // 🌟 NEW: Likes Sorting Logic
+    if (sortBy.value === 'likes-desc') {
+      if (likesB === likesA) return timeB - timeA; // Fallback to newest
+      return likesB - likesA;
+    }
+    if (sortBy.value === 'likes-asc') {
+      if (likesA === likesB) return timeB - timeA; 
+      return likesA - likesB;
+    }
+    // 🌟 END NEW: Likes Sorting
+    
     return 0;
   });
 });
 
-// Navigation Functions
 const openArticle = (article) => {
   selectedArticle.value = article;
-  window.scrollTo(0, 0); // Scroll to top of the reading view
-  // Push to router so the URL updates and users can share it
+  window.scrollTo(0, 0); 
   router.push({ path: '/articles', query: { id: article.id } });
 };
 
 const closeArticle = () => {
   selectedArticle.value = null;
-  // Remove the ID from the URL but stay on the page
   router.push({ path: '/articles' });
 };
 
@@ -297,7 +422,6 @@ const formatDate = (timestamp) => {
 </script>
 
 <style scoped>
-/* A simple animation for transitioning into reading mode */
 .animate-fade-in {
   animation: fadeIn 0.4s ease-out forwards;
 }
@@ -307,7 +431,6 @@ const formatDate = (timestamp) => {
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* Ensure images injected into standard text don't overflow mobile screens */
 article img {
   max-width: 100%;
   height: auto;

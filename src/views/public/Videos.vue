@@ -18,6 +18,8 @@
           <option value="date-asc">Oldest First</option>
           <option value="name-asc">Name (A-Z)</option>
           <option value="name-desc">Name (Z-A)</option>
+          <option value="likes-desc">Most Likes</option>
+          <option value="likes-asc">Least Likes</option>
         </select>
       </div>
     </div>
@@ -46,9 +48,15 @@
         </div>
         <div class="p-4 mt-auto">
           <h3 class="text-lg font-bold text-gray-900 dark:text-white truncate" :title="video.title">{{ video.title }}</h3>
-          <p class="text-sm text-gray-500 dark:text-gray-400 mt-1 truncate">
-            By {{ video.authorName || 'Unknown' }} &bull; {{ formatDate(video.createdAt) }}
-          </p>
+          
+          <div class="flex items-center justify-between mt-1">
+            <p class="text-sm text-gray-500 dark:text-gray-400 truncate">
+              By {{ video.authorName || 'Unknown' }} &bull; {{ formatDate(video.createdAt) }}
+            </p>
+            <span v-if="(video.reactionCount || 0) > 0" class="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap ml-2">
+               ❤️ {{ video.reactionCount }}
+            </span>
+          </div>
         </div>
       </div>
     </div>
@@ -68,7 +76,7 @@
             <video :src="selectedVideo.fileUrl" controls autoplay class="w-full h-full"></video>
           </div>
           
-          <div class="w-full flex flex-col md:flex-row md:items-center justify-between mt-6 gap-4 bg-gray-900/80 p-6 rounded-xl border border-gray-700">
+          <div class="w-full flex flex-col lg:flex-row lg:items-center justify-between mt-6 gap-4 bg-gray-900/80 p-6 rounded-xl border border-gray-700">
             <div class="flex items-center gap-4">
               <img v-if="selectedVideo.authorAvatar" :src="selectedVideo.authorAvatar" class="h-14 w-14 rounded-full object-cover border-2 border-gray-600 bg-gray-800">
               <div v-else class="h-14 w-14 rounded-full bg-gray-700 flex items-center justify-center text-gray-400 border-2 border-gray-600">
@@ -81,11 +89,44 @@
               </div>
             </div>
             
-            <a :href="selectedVideo.fileUrl" target="_blank" download class="inline-flex items-center justify-center gap-3 bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-3 rounded-lg font-bold transition-all transform hover:scale-105 active:scale-95 shadow-xl">
-              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
-              Download Video
-            </a>
-          </div>
+            <div class="flex items-center flex-wrap gap-4">
+              <div class="flex items-center gap-2 border-r border-gray-700 pr-4 mr-2">
+                <template v-if="userProfile && (userProfile.role === 'admin' || userProfile.role === 'creator')">
+                  <button 
+                    @click="toggleReaction('heart')"
+                    :class="[
+                      'flex items-center gap-2 px-3 py-1.5 rounded-full border transition-all text-sm',
+                      userReaction === 'heart' ? 'bg-red-900/30 border-red-800 text-red-500' : 'bg-gray-800 border-gray-700 text-gray-400 hover:bg-gray-700'
+                    ]"
+                  >
+                    <span>❤️</span> <span class="font-bold">{{ heartCount }}</span>
+                  </button>
+
+                  <button 
+                    @click="toggleReaction('laugh')"
+                    :class="[
+                      'flex items-center gap-2 px-3 py-1.5 rounded-full border transition-all text-sm',
+                      userReaction === 'laugh' ? 'bg-yellow-900/30 border-yellow-800 text-yellow-500' : 'bg-gray-800 border-gray-700 text-gray-400 hover:bg-gray-700'
+                    ]"
+                  >
+                    <span>😂</span> <span class="font-bold">{{ laughCount }}</span>
+                  </button>
+                </template>
+                
+                <template v-else>
+                  <div class="flex items-center gap-4 text-gray-400 text-sm">
+                    <span class="flex items-center gap-1">❤️ {{ heartCount }}</span>
+                    <span class="flex items-center gap-1">😂 {{ laughCount }}</span>
+                  </div>
+                </template>
+              </div>
+
+              <a :href="selectedVideo.fileUrl" target="_blank" download class="inline-flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-2.5 rounded-lg font-bold transition-all transform hover:scale-105 active:scale-95 shadow-xl text-sm">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                Download Video
+              </a>
+            </div>
+            </div>
         </div>
       </div>
     </Teleport>
@@ -96,14 +137,35 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
-import { db } from '../../firebase';
-import { collection, getDocs, query, orderBy, where } from 'firebase/firestore';
+// 🌟 FIX: Added missing auth imports
+import { db, auth } from '../../firebase';
+import { onAuthStateChanged } from 'firebase/auth';
+import { collection, getDocs, query, orderBy, limit, where, doc, getDoc, updateDoc } from 'firebase/firestore'; 
 
 const videos = ref([]);
 const isLoading = ref(true);
 const sortBy = ref('date-desc');
 const selectedVideo = ref(null);
 const route = useRoute();
+
+const userProfile = ref(null); 
+const currentUserId = ref(null);
+const isLoggedIn = ref(false); // 🌟 FIX: Added missing ref
+
+const userReaction = computed(() => {
+  if (!selectedVideo.value || !currentUserId.value) return null;
+  return selectedVideo.value.reactions?.[currentUserId.value] || null;
+});
+
+const heartCount = computed(() => {
+  if (!selectedVideo.value?.reactions) return 0;
+  return Object.values(selectedVideo.value.reactions).filter(r => r === 'heart').length;
+});
+
+const laughCount = computed(() => {
+  if (!selectedVideo.value?.reactions) return 0;
+  return Object.values(selectedVideo.value.reactions).filter(r => r === 'laugh').length;
+});
 
 onMounted(async () => {
   try {
@@ -129,6 +191,20 @@ onMounted(async () => {
         openModal(targetVideo);
       }
     }
+
+  onAuthStateChanged(auth, async (user) => {
+    isLoggedIn.value = !!user;
+    if (user) {
+      currentUserId.value = user.uid;
+      const profileSnap = await getDoc(doc(db, 'users', user.uid));
+      if (profileSnap.exists()) {
+        userProfile.value = profileSnap.data();
+      }
+    } else {
+      currentUserId.value = null;
+      userProfile.value = null;
+    }
+  });
 });
 
 const sortedVideos = computed(() => {
@@ -138,13 +214,61 @@ const sortedVideos = computed(() => {
     const titleA = a.title.toLowerCase();
     const titleB = b.title.toLowerCase();
 
+    const likesA = a.reactionCount || 0; 
+    const likesB = b.reactionCount || 0;
+
     if (sortBy.value === 'date-desc') return timeB - timeA;
     if (sortBy.value === 'date-asc') return timeA - timeB;
     if (sortBy.value === 'name-asc') return titleA.localeCompare(titleB);
     if (sortBy.value === 'name-desc') return titleB.localeCompare(titleA);
+
+    if (sortBy.value === 'likes-desc') {
+      if (likesB === likesA) return timeB - timeA; 
+      return likesB - likesA;
+    }
+    if (sortBy.value === 'likes-asc') {
+      if (likesA === likesB) return timeB - timeA; 
+      return likesA - likesB;
+    }
+
     return 0;
   });
 });
+
+const toggleReaction = async (type) => {
+  if (!selectedVideo.value || !currentUserId.value) return;
+
+  const videoId = selectedVideo.value.id;
+  const currentReactions = selectedVideo.value.reactions || {};
+  let newReactions = { ...currentReactions };
+
+  if (newReactions[currentUserId.value] === type) {
+    delete newReactions[currentUserId.value];
+  } else {
+    newReactions[currentUserId.value] = type;
+  }
+
+  const totalCount = Object.keys(newReactions).length;
+
+  selectedVideo.value.reactions = newReactions;
+  selectedVideo.value.reactionCount = totalCount;
+
+  const videoIndex = videos.value.findIndex(a => a.id === videoId);
+  if (videoIndex !== -1) {
+    videos.value[videoIndex].reactions = newReactions;
+    videos.value[videoIndex].reactionCount = totalCount;
+  }
+
+  try {
+    // 🌟 FIX: Changed 'videosId' to 'videoId'
+    await updateDoc(doc(db, 'videos', videoId), {
+      reactions: newReactions,
+      reactionCount: totalCount
+    });
+  } catch (error) {
+    console.error("Failed to save reaction:", error);
+  }
+};
 
 const openModal = (video) => {
   selectedVideo.value = video;
