@@ -59,6 +59,12 @@
             <input v-model="feedbackWebhookUrl" type="url" placeholder="https://discord.com/api/webhooks/..." class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-800 dark:text-white text-sm">
           </div>
 
+          <div class="bg-gray-50 dark:bg-gray-900 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
+            <label class="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">New Content Announcements</label>
+            <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">Alerts the server when an Article, Artwork, or Video is officially approved and published.</p>
+            <input v-model="contentWebhookUrl" type="url" placeholder="https://discord.com/api/webhooks/..." class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-800 dark:text-white text-sm">
+          </div>
+
           <div class="flex items-center gap-4 pt-2">
             <button type="submit" :disabled="isSavingWebhooks" class="px-6 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50 transition-colors font-bold text-sm shadow-sm">
               {{ isSavingWebhooks ? 'Saving...' : 'Save All Webhooks' }}
@@ -198,6 +204,8 @@ const tagsDocRef = doc(db, 'config', 'tags');
 
 const tokenWebhookUrl = ref('');     
 const feedbackWebhookUrl = ref('');  
+const contentWebhookUrl = ref('');
+
 const isSavingWebhooks = ref(false);
 const webhooksSaveStatus = ref('');
 const guildSettingsRef = doc(db, 'settings', 'guild');
@@ -227,6 +235,7 @@ onMounted(async () => {
     const data = settingsSnap.data();
     if (data.discordWebhook) tokenWebhookUrl.value = data.discordWebhook;
     if (data.feedbackWebhook) feedbackWebhookUrl.value = data.feedbackWebhook;
+    if (data.contentWebhook) contentWebhookUrl.value = data.contentWebhook;
     if (data.schedule) scheduleEvents.value = data.schedule;
   }
 
@@ -290,7 +299,6 @@ const removeTag = async (tagToRemove) => {
   }
 };
 
-// 🌟 NEW: Webhook Save Function
 const saveWebhooks = async () => {
   isSavingWebhooks.value = true;
   webhooksSaveStatus.value = '';
@@ -298,7 +306,8 @@ const saveWebhooks = async () => {
   try {
     await setDoc(guildSettingsRef, {
       discordWebhook: tokenWebhookUrl.value.trim(),  // Keeping original DB key to not break Login.vue
-      feedbackWebhook: feedbackWebhookUrl.value.trim() // New DB key
+      feedbackWebhook: feedbackWebhookUrl.value.trim(), // New DB key
+      contentWebhook: contentWebhookUrl.value.trim()
     }, { merge: true });
 
     await addDoc(collection(db, 'activities'), {

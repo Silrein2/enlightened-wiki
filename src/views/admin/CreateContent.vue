@@ -367,6 +367,7 @@ const handleSubmit = async () => {
 
     let fileUrl = null;
 
+    // 1. Handle File Uploads first (if artwork or video)
     if (contentType.value !== 'article') {
       if (!selectedFile.value) throw new Error("Please select a file to upload.");
       const fileExtension = selectedFile.value.name.split('.').pop();
@@ -376,10 +377,12 @@ const handleSubmit = async () => {
       fileUrl = await getDownloadURL(snapshot.ref);
     }
 
+    // 2. Determine metadata
     const isAnon = contentType.value === 'article' && isAnonymous.value;
     const role = currentUserProfile.value.role;
     const initialStatus = role === 'admin' ? 'Approved' : 'Pending';
 
+    // 3. Build the Payload
     const contentPayload = {
         title: title.value,
         type: contentType.value,
@@ -397,8 +400,10 @@ const handleSubmit = async () => {
       contentPayload.fileUrl = fileUrl; 
     }
 
-    await addDoc(collection(db, `${contentType.value}s`), contentPayload);
+    // 4. Save to Database (Just once!) and grab the document reference
+    const docRef = await addDoc(collection(db, `${contentType.value}s`), contentPayload);
 
+    // 5. Log Activity
     await addDoc(collection(db, 'activities'), {
         userName: currentUserProfile.value.nickname || 'Creator',
         actionType: role === 'admin' ? 'published a new' : 'submitted for approval a new',
@@ -407,7 +412,12 @@ const handleSubmit = async () => {
         timestamp: serverTimestamp()
     });
 
-    // Reset Form
+    // 6. Fire Discord Notification if Admin auto-approved
+    if (initialStatus === 'Approved') {
+      await sendNewContentNotification(contentPayload, docRef.id);
+    }
+
+    // 7. Reset Form
     title.value = '';
     bodyContent.value = '';
     editor.value.commands.setContent(''); // CLEAR THE EDITOR
@@ -421,6 +431,41 @@ const handleSubmit = async () => {
     errorMessage.value = error.message || "An error occurred during upload.";
   } finally {
     isSubmitting.value = false;
+  }
+};
+
+const sendNewContentNotification = async (contentData, contentId) => {
+  try {
+    // 1. Fetch the webhook URL from settings
+    const settingsSnap = await getDoc(doc(db, 'settings', 'guild'));
+    if (!settingsSnap.exists() || !settingsSnap.data().contentWebhook) return;
+    
+    const webhookUrl = settingsSnap.data().contentWebhook;
+
+    const routeName = `${contentData.type.toLowerCase()}s`; 
+    const fullUrl = `${window.location.origin}/${routeName}?id=${contentId}`;
+
+    // 3. Format the Discord Embed
+    const discordPayload = {
+      username: "Wiki Librarian",
+      // avatar_url: "https://i.imgur.com/AfFp7pu.png", // Optional: put your logo URL here
+      embeds: [{
+        title: `📢 New ${contentData.type} Published!`,
+        // 🌟 This is where the Markdown trick happens:
+        description: `**${contentData.title}**\n\nCreated by: **${contentData.authorName}**\n\nYou can view the new content [right here](${fullUrl}).`,
+        color: 5814783, // Indigo-ish color
+        timestamp: new Date().toISOString()
+      }]
+    };
+
+    await fetch(webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(discordPayload)
+    });
+
+  } catch (error) {
+    console.error("Failed to send Discord notification:", error);
   }
 };
 </script>

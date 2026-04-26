@@ -48,7 +48,8 @@ import {
   query, 
   where, 
   getDocs, 
-  doc, 
+  doc,
+  getDoc, 
   updateDoc, 
   deleteDoc, 
   addDoc, 
@@ -71,7 +72,6 @@ const fetchQueue = async () => {
 
 const approve = async (item) => {
   try {
-    // 1. Update status
     await updateDoc(doc(db, item.collection, item.id), { status: 'Approved' });
     
     // 2. Log Activity
@@ -83,8 +83,11 @@ const approve = async (item) => {
       timestamp: serverTimestamp()
     });
 
+    await sendNewContentNotification(item, item.id);
+
     pendingItems.value = pendingItems.value.filter(i => i.id !== item.id);
     alert(`${item.title} is now live!`);
+
   } catch (e) {
     console.error(e);
   }
@@ -121,6 +124,41 @@ const rejectItem = async (item) => {
       await deleteDoc(doc(db, item.collection, item.id));
       pendingItems.value = pendingItems.value.filter(i => i.id !== item.id);
     }
+  }
+};
+
+const sendNewContentNotification = async (contentData, contentId) => {
+  try {
+    // 1. Fetch the webhook URL from settings
+    const settingsSnap = await getDoc(doc(db, 'settings', 'guild'));
+    if (!settingsSnap.exists() || !settingsSnap.data().contentWebhook) return;
+    
+    const webhookUrl = settingsSnap.data().contentWebhook;
+
+    const routeName = `${contentData.type.toLowerCase()}s`; 
+    const fullUrl = `${window.location.origin}/${routeName}?id=${contentId}`;
+
+    const discordPayload = {
+      username: "Wiki Librarian",
+      // avatar_url: "https://i.imgur.com/AfFp7pu.png",
+      embeds: [{
+        title: `📢 New ${contentData.type} Published!`,
+
+        description: `**${contentData.title}**\n\nCreated by: **${contentData.authorName}**\n\nYou can view the new content [right here](${fullUrl}).`,
+        color: 5814783, // Indigo-ish color
+        timestamp: new Date().toISOString()
+      }]
+    };
+
+    // 4. Send the payload to Discord
+    await fetch(webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(discordPayload)
+    });
+
+  } catch (error) {
+    console.error("Failed to send Discord notification:", error);
   }
 };
 
