@@ -18,6 +18,52 @@
     </div>
 
     <div v-else class="space-y-16 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
+
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-12 mb-16">
+        <h2 class="text-2xl font-bold text-gray-900 dark:text-white mb-6 flex items-center gap-2">
+          <svg class="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+          Guild Schedule
+        </h2>
+        
+        <div 
+          ref="scheduleContainer"
+          @mousedown="startDrag"
+          @mouseleave="stopDrag"
+          @mouseup="stopDrag"
+          @mousemove="doDrag"
+          class="flex overflow-x-auto pb-4 hide-scrollbar gap-4 snap-x cursor-grab active:cursor-grabbing select-none"
+        >
+          <div 
+            v-for="(dayEvents, index) in weeklySchedule" 
+            :key="index"
+            :class="[
+              'min-w-[200px] flex-1 rounded-xl border p-4 snap-start transition-all',
+              index === currentDayIndex 
+                ? 'bg-indigo-50 border-indigo-300 dark:bg-indigo-900/20 dark:border-indigo-600 shadow-md ring-1 ring-indigo-500' 
+                : 'bg-white border-gray-200 dark:bg-gray-800 dark:border-gray-700'
+            ]"
+          >
+            <div class="flex items-center justify-between mb-4 border-b border-gray-100 dark:border-gray-700 pb-2">
+              <h3 :class="['font-bold', index === currentDayIndex ? 'text-indigo-700 dark:text-indigo-400' : 'text-gray-900 dark:text-white']">
+                {{ weekDayNames[index] }}
+              </h3>
+              <span v-if="index === currentDayIndex" class="text-[10px] uppercase font-bold bg-indigo-600 text-white px-2 py-0.5 rounded-full">Today</span>
+            </div>
+
+            <div v-if="dayEvents.length > 0" class="space-y-3">
+              <div v-for="(event, eIndex) in dayEvents" :key="eIndex" class="group">
+                <p class="text-xs font-bold text-gray-500 dark:text-gray-400 group-hover:text-indigo-500 transition-colors">{{ event.timeStr }}</p>
+                <p class="text-sm font-medium text-gray-900 dark:text-gray-100">{{ event.title }}</p>
+              </div>
+            </div>
+            
+            <div v-else class="flex h-16 items-center justify-center">
+              <p class="text-xs text-gray-400 dark:text-gray-500 italic">No events</p>
+            </div>
+          </div>
+
+        </div>
+      </div>
       
       <section>
         <div class="flex items-center justify-between mb-6">
@@ -121,12 +167,39 @@
 <script setup>
 import { ref, onMounted } from 'vue';
 import { db } from '../../firebase';
-import { collection, query, orderBy, limit, getDocs, where } from 'firebase/firestore';
+import { collection, query, orderBy, limit, getDocs, where, doc, getDoc } from 'firebase/firestore';
 
 const isLoading = ref(true);
 const latestArticles = ref([]);
 const latestArtworks = ref([]);
 const latestVideos = ref([]);
+
+const weeklySchedule = ref([[], [], [], [], [], [], []]);
+const weekDayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const currentDayIndex = new Date().getDay();
+
+const scheduleContainer = ref(null);
+let isDown = false;
+let startX;
+let scrollLeft;
+
+const startDrag = (e) => {
+  isDown = true;
+  startX = e.pageX - scheduleContainer.value.offsetLeft;
+  scrollLeft = scheduleContainer.value.scrollLeft;
+};
+
+const stopDrag = () => {
+  isDown = false;
+};
+
+const doDrag = (e) => {
+  if (!isDown) return;
+  e.preventDefault(); // Prevents text selection while dragging
+  const x = e.pageX - scheduleContainer.value.offsetLeft;
+  const walk = (x - startX) * 1.5; // Scroll speed multiplier
+  scheduleContainer.value.scrollLeft = scrollLeft - walk;
+};
 
 // Helper function to format Firebase timestamps
 const formatDate = (timestamp) => {
@@ -164,7 +237,46 @@ onMounted(async () => {
     fetchLatest('artworks', latestArtworks),
     fetchLatest('videos', latestVideos)
   ]);
+
+  try {
+    const settingsSnap = await getDoc(doc(db, 'settings', 'guild'));
+    if (settingsSnap.exists() && settingsSnap.data().schedule) {
+      const rawSchedule = settingsSnap.data().schedule;
+      const localizedGrouped = [[], [], [], [], [], [], []];
+
+      rawSchedule.forEach(event => {
+        // Feed the UTC data back into Date.UTC (Jan 7 2024 was a Sunday reference)
+        const d = new Date(Date.UTC(2024, 0, 7 + event.utcDay, event.utcHours, event.utcMinutes));
+        
+        // Extract the LOCALIZED day and time for the viewer
+        const localDay = d.getDay(); 
+        const localTimeStr = new Intl.DateTimeFormat('default', { hour: 'numeric', minute: '2-digit' }).format(d);
+        
+        localizedGrouped[localDay].push({
+          title: event.title,
+          timeStr: localTimeStr,
+          sortValue: d.getTime() // Used to sort multiple events on the same day
+        });
+      });
+
+      // Sort events chronologically within each day
+      localizedGrouped.forEach(day => day.sort((a, b) => a.sortValue - b.sortValue));
+      weeklySchedule.value = localizedGrouped;
+    }
+  } catch (error) {
+    console.error("Failed to load schedule:", error);
+  }
   
   isLoading.value = false;
 });
 </script>
+
+<style scoped>
+.hide-scrollbar {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+.hide-scrollbar::-webkit-scrollbar {
+  display: none; /* Chrome, Safari and Opera */
+}
+</style>
